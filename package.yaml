@@ -1,0 +1,41 @@
+
+name: kern
+
+dependencies:
+- base
+- array
+- mtl
+- containers
+- isocline
+- text
+
+default-extensions:
+- BlockArguments
+- LambdaCase
+- AllowAmbiguousTypes
+- TypeApplications
+- OverloadedRecordDot
+- DuplicateRecordFields
+- NoFieldSelectors
+- ImportQualifiedPost
+- NamedFieldPuns
+- ScopedTypeVariables
+- TypeSynonymInstances
+- FlexibleInstances
+- InstanceSigs
+
+ghc-options: -freverse-errors
+
+library:
+  source-dirs:
+  - src
+
+executables:
+  kern-repl:
+    source-dirs:
+    - app
+
+    main: Main.hs
+
+    dependencies:
+    - kern
