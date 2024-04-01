@@ -30,6 +30,7 @@ data Atom
   | Number Double
   | Bool   Bool
   | Func   (Function Value Value)
+  | Macro  Macro
   | Lam    Lambda
   | Env    Env
   deriving (Eq)
@@ -37,6 +38,12 @@ data Atom
 data Lambda = Lambda
   { env  :: Env
   , args :: Value
+  , body :: Value
+  }
+  deriving (Eq)
+
+data Macro = M
+  { args :: Value
   , body :: Value
   }
   deriving (Eq)

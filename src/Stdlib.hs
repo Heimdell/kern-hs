@@ -48,8 +48,8 @@ evalSF = toLisp @(SF (Value, (Value, ())) Value) $ SF \(a, (env, ())) -> do
   old <- gets (.env)
   env <- eval env
   env <- eitherToLispM do fromLisp env
-  _   <- modify \s -> (s :: Memory) {env = env}
   a   <- eval a
+  _   <- modify \s -> (s :: Memory) {env = env}
   res <- eval a
   _   <- modify \s -> (s :: Memory) {env = old}
   return res
@@ -60,8 +60,7 @@ readF = toLisp @(Fun (String, ()) Value) $ Fun \(prompt, ()) -> do
   txt <- liftIO do readline prompt
   case runParser value (fromString "<stdin>" txt) of
     Right val -> return val
-    Left msg -> do
-      throwError  ParsingFailed {msg}
+    Left  msg -> throwError ParsingFailed {msg}
 
 -- Распечатать термы.
 --
@@ -102,6 +101,9 @@ appendF = toLisp @(Fun (String, (String, ())) String) $ Fun \(a, (b, ())) -> pur
 lambdaSF = toLisp @(SF (Value, (Value, ())) Value) $ SF \(args, (body, ())) -> do
   e <- gets (.env)
   pure $ Atom $ Lam $ Lambda e args body
+
+macroSF = toLisp @(SF (Value, (Value, ())) Value) $ SF \(args, (body, ())) -> do
+  pure $ Atom $ Macro $ M args body
 
 -- Реализация `def`.
 --
@@ -149,6 +151,7 @@ stdlib = tabulaRasa
   & define "mod"    modF
   & define "++"     appendF
   & define "lambda" lambdaSF
+  & define "macro"  macroSF
   & define "read"   readF
   & define "get-env" getEnvSF
   & define "exit"    exitF

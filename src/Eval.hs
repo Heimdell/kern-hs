@@ -23,11 +23,9 @@ import Debug.Trace
 --
 eval :: Value -> LispM Value
 eval val = do
-  -- traceShowM ("EVAL", val)
   case val of
     Cons {car = fun, cdr = args} -> do
       fun <- eval fun
-      -- traceShowM ("APPLY", fun, args)
       apply fun args
 
     Atom (Name var) -> retrieve var
@@ -59,6 +57,14 @@ alloc val = do
     }
   return mem.ptr
 
+withEnv :: (Env -> Env) -> LispM Value -> LispM Value
+withEnv f ma = do
+  old  <- gets (.env)
+  _    <- modify \s -> (s :: Memory) { env = f old }
+  res  <- ma
+  _    <- modify \s -> (s :: Memory) { env = old }
+  return res
+
 -- Вызов функций.
 --
 apply :: Value -> Value -> LispM Value
@@ -66,15 +72,19 @@ apply fun args = case fun of
   Atom (Func func) -> func args
   Atom (Lam (Lambda e a b)) -> do
     args <- prebake args
-    -- traceShowM ("MATCH", a, args)
     de   <- match a args `catchError` \case
       PatternMatchFail {} -> throwError PatternMatchFail {fact = args, form = a}
       e                   -> throwError e
-    old  <- gets (.env)
-    _    <- modify \s -> (s :: Memory) { env = de <> e }
-    res  <- eval b
-    _    <- modify \s -> (s :: Memory) { env = old }
-    return res
+    withEnv (const (de <> e)) do
+      eval b
+
+  Atom (Macro (M a b)) -> do
+    de <- match a args `catchError` \case
+      PatternMatchFail {} -> throwError PatternMatchFail {fact = args, form = a}
+      e                   -> throwError e
+    withEnv (de <>) do
+      eval b
+
   _ ->
     case args of
       Nil -> pure fun
