@@ -8,6 +8,7 @@ dependencies:
 - containers
 - isocline
 - text
+- polysemy
 
 default-extensions:
 - BlockArguments
@@ -23,6 +24,8 @@ default-extensions:
 - TypeSynonymInstances
 - FlexibleInstances
 - InstanceSigs
+- DerivingStrategies
+- DataKinds
 
 ghc-options: -freverse-errors
 
