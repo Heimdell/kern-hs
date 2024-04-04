@@ -1,6 +1,8 @@
 
 name: kern
 
+cabal-version: 3.10.3.0
+
 dependencies:
 - base
 - array
@@ -9,6 +11,8 @@ dependencies:
 - isocline
 - text
 - polysemy
+- polysemy-plugin
+- data-fix
 
 default-extensions:
 - BlockArguments
@@ -26,8 +30,16 @@ default-extensions:
 - InstanceSigs
 - DerivingStrategies
 - DataKinds
+- DeriveTraversable
+- DeriveFunctor
+- DeriveFoldable
+- StandaloneDeriving
+- ConstraintKinds
+- RankNTypes
 
-ghc-options: -freverse-errors
+default-language: GHC2021
+
+ghc-options: -freverse-errors # -fplugin=Polysemy.Plugin
 
 library:
   source-dirs:

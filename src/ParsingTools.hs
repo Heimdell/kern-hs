@@ -200,3 +200,13 @@ lineComment start = do
   many do satisfy ('\n' /=)
   satisfy ('\n' ==)
   pure ()
+
+getPosition :: Parser Position
+getPosition = Parser \input -> ParseResult
+  { result    = Just input.position
+  , remaining = Nothing
+  , expected  = Set.empty
+  }
+
+choice :: Alternative f => [f a] -> f a
+choice = foldr (<|>) empty

@@ -105,6 +105,7 @@ instance Show Atom where
     Bool   False -> "#false"
     Func   _     -> "<builtin>"
     Lam    l     -> show l
+    Macro  m     -> show m
     Env    _     -> "<env>"
     Number d     -> if fromIntegral f == d then show f else show d
       where
@@ -113,6 +114,10 @@ instance Show Atom where
 instance Show Lambda where
   show = \case
     Lambda _ a b -> show (Cons (Atom (Name "lambda")) (Cons a (Cons b Nil)))
+
+instance Show Macro where
+  show = \case
+    M a b -> show (Cons (Atom (Name "macro")) (Cons a (Cons b Nil)))
 
 instance Show Value where
   show = \case
