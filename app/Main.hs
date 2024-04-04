@@ -16,29 +16,43 @@ import System.Environment
 import System.Console.Isocline
 
 import ParsingTools
-import Parser
-import Machine
-import Eval
-import Stdlib
+import LVM.Pass.Lexer
+import LVM.Pass.Parser
+import LVM.Pass.Run
+import LVM.Prog
+import LVM.Phase.Raw
+import LVM.Phase.Runtime
 import Input
 
-import Data.Void
+import Polysemy
+import Polysemy.Error
 
-echo :: LispM Void
-echo =
-  forever do
-    line <- liftIO do readline "KERN"
-    case runParser (many space *> value <* endOfStream) $ fromString "stdin" line of
-      Left err -> liftIO do putStrLn err
-      Right val -> do
-        val <- tryError do eval val
-        liftIO do either (putStrLn . ("ERROR: " <>) . show) print val
+echo :: VM m => Sem m ()
+echo = do
+  line <- liftIO do readlineMaybe "KERN"
+  case line of
+    Nothing -> return ()
+    Just line -> do
+      case runParser (many space *> stmt <* endOfStream) $ fromString "stdin" line of
+        Left err -> do
+          liftIO do putStrLn err
+          echo
+        Right stmt -> do
+          withStmt stmt \case
+              Nothing -> echo
+              Just val -> do
+                liftIO do print val
+                echo
+            `catch` \(e :: Report) -> do
+              liftIO do putStrLn $ "ERROR: " <> show e
+              echo
 
 main = do
+  setHistory ".kern" 200
   getArgs >>= \case
     [] -> do
-      _ <- runLispM stdlib echo
-      return ()
+      _ <- runVM dispatch echo
+      putStrLn "Bye!"
 
     [file] -> do
       main1 file
@@ -46,17 +60,20 @@ main = do
     _ -> do
       error "USAGE: kern | kern FILE"
 
-load :: String -> LispM Void
-load fname = do
+load :: VM m => String -> Sem m a -> Sem m (Maybe a)
+load fname k = do
   stream <- liftIO do fromFile fname
-  case runParser (many space *> value <* endOfStream) stream of
-    Left err -> liftIO do putStrLn err
-    Right val -> do
-      val <- tryError do eval val
-      liftIO do either (putStrLn . ("ERROR: " <>) . show) print val
-  echo
+  case runParser (many space *> many stmt <* endOfStream) stream of
+    Left err -> do
+      liftIO do putStrLn err
+      return Nothing
+    Right stmts -> do
+      withStmts stmts do
+        Just <$> k
 
 main1 :: String -> IO ()
 main1 fname = do
-  _ <- runLispM stdlib (load fname)
+  runVM dispatch do
+    load fname do
+      echo
   return ()

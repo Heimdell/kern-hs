@@ -1,0 +1,66 @@
+
+def [ (+ $+) (< $<) ]
+
+;
+; Right fold.
+;
+; fold-r = \f, z, xs =>
+;   match xs with {
+;     %Nil _ => z;
+;     %Cons pair =>
+;       f pair.head (fold-r f z pair.tail)
+;   }
+;
+def [
+  (fold-r
+    (lambda [f z xs]
+      (match xs
+        { (%Nil  u)     z
+          (%Cons pair) (f (#head pair) (fold-r f z (#tail pair)))
+        }
+      )
+    )
+  )
+]
+
+def [
+  (map
+    (lambda [f xs]
+      (fold-r
+        (lambda [x acc] (%Cons { #head (f x) #tail acc }))
+        (%Nil {})
+        xs
+      )
+    )
+  )
+]
+
+def [
+  (unfold-r
+    (lambda [z f]
+      (match (f z) {
+        (%Nothing u) (%Nil u)
+        (%Just pair) (%Cons {
+          #head (#fst pair)
+          #tail (unfold-r (#snd pair) f)
+        })
+      })
+    )
+  )
+]
+
+def [
+  (range (lambda [l h]
+    (unfold-r l (lambda [i]
+      (match (< i (+ 1 h)) {
+        (%True  u) (%Just {#fst i #snd (+ 1 i)})
+        (%False u) (%Nothing {})
+      })
+    ))
+  ))
+]
+
+def [
+  (sum    (lambda [xs] (fold-r + 0 xs)))
+  (length (lambda [xs] (sum (map (lambda [x] 1) xs))))
+]

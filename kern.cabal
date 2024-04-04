@@ -10,9 +10,18 @@ build-type:     Simple
 
 library
   exposed-modules:
+      Data.Fix
       Eval
       Input
       Interop
+      LVM
+      LVM.Name
+      LVM.Pass.Lexer
+      LVM.Pass.Parser
+      LVM.Pass.Run
+      LVM.Phase.Raw
+      LVM.Phase.Runtime
+      LVM.Prog
       Machine
       Parser
       ParsingTools
@@ -35,15 +44,26 @@ library
       TypeSynonymInstances
       FlexibleInstances
       InstanceSigs
+      DerivingStrategies
+      DataKinds
+      DeriveTraversable
+      DeriveFunctor
+      DeriveFoldable
+      StandaloneDeriving
+      ConstraintKinds
+      RankNTypes
   ghc-options: -freverse-errors
   build-depends:
       array
     , base
     , containers
+    , data-fix
     , isocline
     , mtl
+    , polysemy
+    , polysemy-plugin
     , text
-  default-language: Haskell2010
+  default-language: GHC2021
 
 executable kern-repl
   main-is: Main.hs
@@ -65,13 +85,24 @@ executable kern-repl
       TypeSynonymInstances
       FlexibleInstances
       InstanceSigs
+      DerivingStrategies
+      DataKinds
+      DeriveTraversable
+      DeriveFunctor
+      DeriveFoldable
+      StandaloneDeriving
+      ConstraintKinds
+      RankNTypes
   ghc-options: -freverse-errors
   build-depends:
       array
     , base
     , containers
+    , data-fix
     , isocline
     , kern
     , mtl
+    , polysemy
+    , polysemy-plugin
     , text
-  default-language: Haskell2010
+  default-language: GHC2021

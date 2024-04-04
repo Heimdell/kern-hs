@@ -83,6 +83,7 @@ apply fun args = case fun of
       PatternMatchFail {} -> throwError PatternMatchFail {fact = args, form = a}
       e                   -> throwError e
     withEnv (de <>) do
+      liftIO . print =<< get
       eval b
 
   _ ->

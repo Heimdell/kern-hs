@@ -133,25 +133,25 @@ tabulaRasa = Memory mempty mempty 0
 --
 stdlib :: Memory
 stdlib = tabulaRasa
-  & define "list"   listF
-  & define "quote"  quoteSF
-  & define "def"    defSF
-  & define "set!"   setSF
-  & define "eval"   evalSF
-  & define "print"  printF
-  & define "do"     doF
-  & define "cond"   condSF
-  & define ">="     geqF
-  & define "<="     leqF
-  & define "="      eqF
-  & define ">"      gtF
-  & define "+"      plusF
-  & define "/"      divF
-  & define "-"      minusF
-  & define "mod"    modF
-  & define "++"     appendF
-  & define "lambda" lambdaSF
-  & define "macro"  macroSF
-  & define "read"   readF
+  & define "list"    listF
+  & define "quote"   quoteSF
+  & define "def"     defSF
+  & define "set!"    setSF
+  & define "eval-in" evalSF
+  & define "print"   printF
+  & define "do"      doF
+  & define "cond"    condSF
+  & define ">="      geqF
+  & define "<="      leqF
+  & define "="       eqF
+  & define ">"       gtF
+  & define "+"       plusF
+  & define "/"       divF
+  & define "-"       minusF
+  & define "mod"     modF
+  & define "++"      appendF
+  & define "lambda"  lambdaSF
+  & define "macro"   macroSF
+  & define "read"    readF
   & define "get-env" getEnvSF
   & define "exit"    exitF

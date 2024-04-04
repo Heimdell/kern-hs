@@ -25,6 +25,9 @@ data Position = Position
   , filename :: String
   }
 
+instance Show Position where
+  show pos = pos.filename <> ":" <> show pos.line <> ":" <> show pos.column
+
 -- Следующий символ.
 --
 uncons :: Stream -> Maybe (Char, Stream)
