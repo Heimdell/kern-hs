@@ -23,3 +23,6 @@ deriving stock instance (Show (f (Fix  f))) => Show (Fix f)
 
 cata :: Functor f => (f a -> a) -> Fix f -> a
 cata alg (Fix f) = alg (fmap (cata alg) f)
+
+instance {-# OVERLAPPING #-} (Show (f (Tree f a))) => Show (Tree f a) where
+  show (_ :> f) = show f

@@ -11,24 +11,29 @@ import LVM.Name
 import LVM.Phase.Raw
 import ParsingTools
 
-reserved name = name `elem` words "let match def do lambda"
+reserved name = name `elem` words "let match with def do lambda return"
 
 -- Разобрать символ начала имени.
 --
 nameCharStart :: Parser Char
 nameCharStart = satisfy \c ->
-  not (isSpace c || isDigit c || elem c "!%$#(){}[]\"'.,;#")
+  not (isSpace c || isDigit c || elem c "\\!%$#(){}[]\"'.,;#" || elem c ['A'.. 'Z'])
+
+-- Разобрать символ начала имени.
+--
+nameCtorStart :: Parser Char
+nameCtorStart = satisfy \c -> elem c ['A'.. 'Z']
 
 -- Разобрать символ продолжения имени.
 --
 nameChar :: Parser Char
 nameChar = satisfy \c ->
-  not (isSpace c || elem c "(){}[]\";")
+  not (isSpace c || elem c "\\(){}[]/\".,;")
 
 -- Разобрать пробельный символ.
 --
 space :: Parser ()
-space = void (satisfy isSpace) <|> lineComment ";"
+space = void (satisfy isSpace) <|> lineComment "//"
 
 -- Сделать токен из парсера.
 --
@@ -51,6 +56,19 @@ name = token "name" do
     return (pos, n)
   return Name {pos, raw = n, index = 0}
 
+-- Разобрать имя.
+--
+ctor :: Parser Name
+ctor = token "ctor" do
+  (pos, n) <- backtrack do
+    pos <- getPosition
+    h <- nameCtorStart
+    t <- many nameChar
+    let n = h : t
+    guard (not (reserved n))
+    return (pos, n)
+  return Name {pos, raw = n, index = 0}
+
 -- Разобрать числовой литерал.
 --
 float :: Parser Double
@@ -63,6 +81,13 @@ float = token "number" do
     char '.'
     some do satisfy isDigit
   return (read (maybe "" pure s <> a <> maybe "" ("." <>) b))
+
+
+-- Разобрать числовой литерал.
+--
+count :: Parser Int
+count = token "count" do
+  read <$> some do satisfy isDigit
 
 -- Разобрать символьный литерал.
 --

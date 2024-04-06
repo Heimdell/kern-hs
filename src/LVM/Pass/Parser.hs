@@ -12,6 +12,8 @@ import LVM.Prog
 import LVM.Name
 import LVM.Phase.Raw
 
+import Debug.Trace
+
 {-
 data Prog_ self
   = Var Name
@@ -33,116 +35,137 @@ data Prog_ self
   deriving stock (Show, Functor, Foldable, Traversable)
 -}
 
+stmts :: Parser [Stmt Prog]
+stmts = many do
+  stmt <* tok ";"
+
 stmt :: Parser (Stmt Prog)
 stmt = choice [def, force]
   where
     def = do
-      _     <- tok "def"
-      decls <- parens Square do
-        many do
-          parens Round do
-            n <- name
-            p <- prog
-            return (n, p)
-      return $ Def decls
+      _     <- tok "let"
+      decls <- do
+          n <- name
+          _ <- tok "="
+          p <- prog
+          return (n, p)
+        `sepBy` tok ","
+      return $ Let decls
 
     force = do
-      _ <- tok "!"
       p <- prog
       return $ Force p
 
 prog :: Parser Prog
-prog = do
-  pos <- getPosition
-  f <- choice
-    [ atom
-    , construct
-    ]
-  return $ pos :> f
+prog = app
   where
-    atom      =                 choice [var, bif, num, str, rec_]
-    construct = parens Round do choice [lam, app, let_, sym, match, get, do_]
+    atom = choice
+      [ num
+      , var
+      , bif
+      , str
+      , rec_
+      , parens Round prog
+      , lam
+      , sym
+      , match
+      ]
+    app = do
+      pos  <- getPosition
+      core <- get
+      args <- many get
+      return $ foldl (\f arg -> pos :> App f arg) core args
 
-    do_ :: Parser (Prog_ Prog)
-    do_ = do
+    get = do
+      pos  <- getPosition
+      core <- atom
+      fs   <- many do
+        tok "."
+        name
+      return $ foldl (\box field -> pos :> Get box field) core fs
+
+    pin p = pure (:>) <*> getPosition <*> p
+
+    do_ :: Parser Prog
+    do_ = pin do
       _     <- tok "do"
-      stmts <- many stmt
+      ss    <- stmts
+      _     <- tok "return"
       res   <- prog
-      return $ Do stmts res
+      return $ Do ss res
 
-    var :: Parser (Prog_ Prog)
-    var = Var <$> name
+    var :: Parser Prog
+    var = pin do Var <$> name
 
-    bif :: Parser (Prog_ Prog)
-    bif = do
+    bif :: Parser Prog
+    bif = pin do
       _ <- char '$'
-      BIF . (.raw) <$> name
+      n <- name
+      _ <- tok "/"
+      i <- count
+      return $ BIF n.raw i
 
-    num :: Parser (Prog_ Prog)
-    num = Num <$> float
+    num :: Parser Prog
+    num = pin do Num <$> float
 
-    str :: Parser (Prog_ Prog)
-    str = Str <$> stringLiteral
+    str :: Parser Prog
+    str = pin do Str <$> stringLiteral
 
-    let_ :: Parser (Prog_ Prog)
-    let_ = do
-      _     <- tok "let"
-      decls <- parens Square do
-        many do
-          parens Round do
-            n <- name
-            p <- prog
-            return (n, p)
-      b <- prog
-      return $ Let decls b
-
-    match :: Parser (Prog_ Prog)
-    match = do
+    match :: Parser Prog
+    match = pin do
       _    <- tok "match"
       subj <- prog
+      _    <- tok "with"
       alts <- parens Curly do
         many do
-          (ctor, arg) <- parens Round do
-            _    <- char '%'
-            ctor <- name
-            arg  <- name
-            return (ctor, arg)
-          b <- prog
-          return (ctor, (arg, b))
+          c    <- ctor
+          arg  <- name
+          _    <- tok "=>"
+          b    <- prog
+          _    <- tok ";"
+          return (c, (arg, b))
       return $ Match subj $ Map.fromList alts
 
-    rec_ :: Parser (Prog_ Prog)
-    rec_ = parens Curly do
-      fields <- many do
-        _     <- char '#'
-        field <- name
-        p     <- prog
-        return (field, p)
-      return $ Rec fields
+    rec_ :: Parser Prog
+    rec_ = pin do
+      parens Curly do
+        fields <- flip sepBy (tok ",") do
+          field <- name
+          _     <- tok "="
+          p     <- prog
+          return (field, p)
+        return $ Rec fields
 
-    get :: Parser (Prog_ Prog)
-    get = do
-      _     <- char '#'
-      field <- name
-      p     <- prog
-      return $ Get p field
+    -- get :: Parser (Prog -> Prog)
+    -- get = do
+    --   pos   <- getPosition
+    --   _     <- tok "."
+    --   field <- name
+    --   return \p -> pos :> Get p field
 
-    sym :: Parser (Prog_ Prog)
-    sym = do
-      _    <- char '%'
-      ctor <- name
-      x    <- prog
-      return $ Sym ctor x
+    sym :: Parser Prog
+    sym = pin do
+      c <- ctor
+      x <- get
+      return $ Sym c x
 
-    app :: Parser (Prog_ Prog)
-    app = do
-      f  <- prog
-      xs <- many prog
-      return $ App f xs
+    -- app :: Parser (Prog -> Prog)
+    -- app = do
+    --   pos <- getPosition
+    --   xs <- parens Round do prog `sepBy` tok ","
+    --   return \p -> pos :> App p xs
 
-    lam :: Parser (Prog_ Prog)
+    t :: (Show a) => String -> Parser a -> Parser a
+    t msg p = do
+      res <- p
+      traceM (msg <> " " <> show res)
+      return res
+
+    lam :: Parser Prog
     lam = do
-      tok "lambda"
-      args <- parens Square do many name
+      pos <- getPosition
+      tok "\\"
+      args <- name `sepBy` tok ","
+      _    <- tok "=>"
       body <- prog
-      return (Lam args body)
+      return $ foldr (\arg b -> pos :> Lam arg b) body args
