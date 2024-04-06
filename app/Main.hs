@@ -63,7 +63,7 @@ main = do
 load :: VM m => String -> Sem m a -> Sem m (Maybe a)
 load fname k = do
   stream <- liftIO do fromFile fname
-  case runParser (many space *> many stmt <* endOfStream) stream of
+  case runParser (many space *> stmts <* endOfStream) stream of
     Left err -> do
       liftIO do putStrLn err
       return Nothing

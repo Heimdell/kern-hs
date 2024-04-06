@@ -21,13 +21,13 @@ data Thunk
   deriving stock (Show)
 
 data Value_ self
-  = Closure (Map.Map Name Addr) [Name] Prog
+  = Closure (Map.Map Name Addr) Name Prog
   | Symbol   Name self
   | Record  (Map.Map Name self)
   | Number   Double
   | Text     String
-  | Builtin  String
-  deriving stock (Show, Functor, Foldable, Traversable)
+  | Builtin  String Int [self]
+  deriving stock (Functor, Foldable, Traversable)
 
 type Value = (Position, Value_ Int)
 type CutValue = Fix (Compose Maybe (Compose ((,) Position) Value_))
@@ -90,3 +90,12 @@ runVM dispatch
   . runReader dispatch
   . runReader mempty
   . evalState Machine { memory = mempty, hp = 0 }
+
+instance Show self => Show (Value_ self) where
+  show = \case
+    Closure _ arg prog -> "\\" <> show arg <> " => " <> show prog
+    Symbol ctor arg -> "%" <> show ctor <> " " <> show arg
+    Record fs -> "{" <> concat (map ((<> ",") . (\(n, f) -> show n <> "=" <> show f)) (Map.toList fs)) <> "}"
+    Number n -> show n
+    Text   t -> show t
+    Builtin n ix args -> "$" <> show n <> "/" <> show ix <> show args

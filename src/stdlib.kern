@@ -1,66 +1,70 @@
 
-def [ (+ $+) (< $<) ]
-
+let
+  + = $+/2,
+  < = $</2,
+  * = $</2,
+  - = $-/2
 ;
-; Right fold.
+
+let cons = \h, t => Cons {head = h, tail = t};
+let nil  =          Nil {};
+
+let o = \f, g, x => f (g x);
+
+let foldr = \f, z, xs =>
+  match xs with {
+    Nil  _    => z;
+    Cons pair => f pair.head (foldr f z pair.tail);
+  }
 ;
-; fold-r = \f, z, xs =>
-;   match xs with {
-;     %Nil _ => z;
-;     %Cons pair =>
-;       f pair.head (fold-r f z pair.tail)
-;   }
+
+let map = \f => foldr (o cons f) nil;
+
+let head = \xs =>
+  match xs with {
+    Cons pair => pair.head;
+  };
+
+let unfoldr = \z, f =>
+  match f(z) with {
+    Nothing _ => nil;
+    Just pair => cons pair.fst (unfoldr pair.snd f);
+  }
 ;
-def [
-  (fold-r
-    (lambda [f z xs]
-      (match xs
-        { (%Nil  u)     z
-          (%Cons pair) (f (#head pair) (fold-r f z (#tail pair)))
-        }
-      )
-    )
-  )
-]
 
-def [
-  (map
-    (lambda [f xs]
-      (fold-r
-        (lambda [x acc] (%Cons { #head (f x) #tail acc }))
-        (%Nil {})
-        xs
-      )
-    )
-  )
-]
+let iterate = \z, f => cons z (iterate (f z) f);
 
-def [
-  (unfold-r
-    (lambda [z f]
-      (match (f z) {
-        (%Nothing u) (%Nil u)
-        (%Just pair) (%Cons {
-          #head (#fst pair)
-          #tail (unfold-r (#snd pair) f)
-        })
-      })
-    )
-  )
-]
+let if = \b, y, n =>
+  match b with {
+    True  _ => y;
+    False _ => n;
+  }
+;
 
-def [
-  (range (lambda [l h]
-    (unfold-r l (lambda [i]
-      (match (< i (+ 1 h)) {
-        (%True  u) (%Just {#fst i #snd (+ 1 i)})
-        (%False u) (%Nothing {})
-      })
-    ))
-  ))
-]
+let
+  sum    = foldr + 0,
+  length = o sum (map (\_ => 1))
+;
 
-def [
-  (sum    (lambda [xs] (fold-r + 0 xs)))
-  (length (lambda [xs] (sum (map (lambda [x] 1) xs))))
-]
+let take = \n, xs =>
+  if (< n 1)
+    Nil {}
+    match xs with {
+      Nil  _  => Nil {};
+      Cons ne => Cons {head = ne.head, tail = take (- n 1) ne.tail};
+    }
+;
+
+let count-from = \l => iterate l (+ 1);
+let range = \l, h => take (+ 1 (- h l)) (count-from l);
+
+let zip-with = \f, xs, ys =>
+  match xs with {
+    Nil  _  => Nil {};
+    Cons xs =>
+      match ys with {
+        Nil  _  => Nil {};
+        Cons ys => cons (f xs.head ys.head) (zip-with f xs.tail ys.tail);
+      };
+  }
+;

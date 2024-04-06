@@ -49,37 +49,32 @@ eval = \case
     addr <- addressOf name
     force addr
 
-  pos :> Lam args body -> do
+  pos :> Lam arg body -> do
     env <- ask
-    return (pos, Closure env args body)
+    return (pos, Closure env arg body)
 
   pos :> App f xs0 -> do
-    xs <- traverse delay xs0
+    xs <- delay xs0
     eval f >>= \case
-      (_, Closure env args body) -> do
-        local (const (Map.fromList (zip args xs) <> env)) do
+      (_, Closure env arg body) -> do
+        local (const (Map.insert arg xs env)) do
           eval body
 
-      (_, Builtin bif) -> do
-        FFI ffi <- ask @FFI
-        unroll =<< ffi pos bif =<< traverse (roll <=< force) xs
+      (pos1, Builtin bif args stack) -> do
+        case args of
+          1 -> do
+            FFI ffi <- ask @FFI
+            unroll =<< ffi pos bif =<< traverse (roll <=< force) (reverse (xs : stack))
+
+          n -> do
+            return (pos1, Builtin bif (n - 1) (xs : stack))
 
       other0 -> do
         other <- extract other0
         throw (pos, TypeMismatch
-          { expected = "function/" <> show (length xs)
+          { expected = "function"
           , gotValue = other
           })
-
-  _ :> Let decls body -> do
-    rec
-      decls' <- for decls \(name, prog) -> do
-        addr <- local (Map.fromList decls' <>) do
-          delay prog
-        return (name, addr)
-
-    local (Map.fromList decls' <>) do
-      eval body
 
   pos :> Sym ctor x0 -> do
     x <- delay x0
@@ -111,7 +106,7 @@ eval = \case
         other <- extract other0
         throw (pos, NotARecord {subj = other})
 
-  pos :> BIF name -> return (pos, Builtin name)
+  pos :> BIF name index -> return (pos, Builtin name index [])
   pos :> Num n -> return (pos, Number n)
   pos :> Str n -> return (pos, Text n)
 
@@ -128,7 +123,7 @@ withStmts (stmt : stmts) ma = do
 withStmt :: VM m => Stmt Prog -> (Maybe Value -> Sem m a) -> Sem m a
 withStmt stmt ma = do
   case stmt of
-    Def decls -> do
+    Let decls -> do
       rec
         decls' <- for decls \(name, prog) -> do
           addr <- local (Map.fromList decls' <>) do
@@ -198,9 +193,13 @@ unroll None = do
 extract :: VM m => Value -> Sem m CutValue
 extract (pos, val) = case val of
   Closure env args prog -> return $ pos :>? Closure env args prog
-  Builtin name          -> return $ pos :>? Builtin name
   Number  n             -> return $ pos :>? Number  n
   Text    s             -> return $ pos :>? Text    s
+
+  Builtin name ix stack0 -> do
+    stack <- traverse extractArg stack0
+    return $ pos :>? Builtin name ix stack
+
   Symbol ctor arg0 -> do
     arg <- extractArg arg0
     return $ pos :>? Symbol ctor arg
@@ -232,6 +231,11 @@ dispatch = FFI \pos -> \case
     xs <- traverse (from @Double) xs0
     return $ to pos $ sum xs
 
+  "-" -> \[x, y] -> do
+    x <- from @Double x
+    y <- from @Double y
+    return $ to pos $ x - y
+
   "*" -> \xs0 -> do
     xs <- traverse (from @Double) xs0
     return $ to pos $ product xs
@@ -253,10 +257,3 @@ nowhere = Position
   , filename = ""
   , offset   = 0
   }
-
-test :: IO ()
-test = do
-  res <- runVM dispatch do
-    eval (nowhere :> App (nowhere :> BIF "*") [nowhere :> Num 3, nowhere :> Num 4])
-
-  print res
