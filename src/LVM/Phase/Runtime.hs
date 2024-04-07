@@ -22,8 +22,8 @@ data Thunk
 
 data Value_ self
   = Closure (Map.Map Name Addr) Name Prog
-  | Symbol   Name self
-  | Record  (Map.Map Name self)
+  | Symbol   String self
+  | Record  (Map.Map String self)
   | Number   Double
   | Text     String
   | Builtin  String Int [self]
@@ -36,9 +36,10 @@ data Err
   = TypeMismatch             {expected :: String, gotValue :: CutValue}
   | NotASymbol               {subj :: CutValue}
   | NotARecord               {subj :: CutValue}
-  | NoSuchCtor               {ctor  :: Name, ctors  :: [Name]}
-  | NoSuchField              {field :: Name, fields :: [Name]}
+  -- | NoSuchCtor               {ctor  :: String, ctors  :: [Name]}
+  | NoSuchField              {field :: String, fields :: [String]}
   | NoSuchBuiltin            {bif :: String}
+  | NoCaseFor                {gotValue :: CutValue}
   | Can'tPassFunctionsToBIFs
   | LOOP
   | Undefined                {name :: Name}

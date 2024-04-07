@@ -2,6 +2,7 @@
 
 module LVM.Pass.Run where
 
+import Control.Applicative
 import Control.Monad
 import Data.Map qualified as Map
 import Data.Fix
@@ -17,6 +18,7 @@ import Polysemy
 import Polysemy.State hiding (Get)
 import Polysemy.Reader
 import Polysemy.Error
+import Polysemy.NonDet
 
 retrieve :: VM m => Addr -> Sem m Thunk
 retrieve addr = gets @Machine ((Map.! addr) . (.memory))
@@ -81,13 +83,8 @@ eval = \case
     return (pos, Symbol ctor x)
 
   pos :> Match subj alts -> do
-    eval subj >>= \case
-      (_, Symbol ctor vals) -> do
-        match pos ctor vals alts
-
-      subj1 -> do
-        subj2 <- extract subj1
-        throw (pos, NotASymbol {subj = subj2})
+    subj' <- delay subj
+    match pos subj' alts
 
   pos :> Rec fields0 -> do
     fields <- for fields0 \(field, value0) -> do
@@ -151,13 +148,77 @@ alloc thunk = do
     }
   return addr
 
-match :: VM m => Position -> Name -> Addr -> Map.Map Name (Name, Prog) -> Sem m Value
-match pos ctor x alts = do
-  case Map.lookup ctor alts of
-    Nothing -> throw (pos, NoSuchCtor {ctor, ctors = Map.keys alts})
-    Just (arg, body) -> do
-      local (Map.insert arg x) do
+match :: forall m. VM m => Position -> Addr -> [Alt Prog] -> Sem m Value
+match pos value alts = do
+  runNonDetMaybe (scan value alts <|> complain pos value) >>= \case
+    Nothing -> do
+      throw (pos, NoCaseFor (nowhere :>? Record mempty))
+
+    Just res -> do
+      return res
+  where
+    complain :: VM m => Position -> Addr -> Sem (NonDet : m) Value
+    complain pos addr = do
+      value0 <- force addr
+      value <- extract value0
+      throw (pos, NoCaseFor value)
+
+    scan :: Addr -> [Alt Prog] -> Sem (NonDet : m) Value
+    scan val [] = empty
+    scan val (alt : alts) = scanOne val alt <|> scan val alts
+
+    scanOne :: Addr -> Alt Prog -> Sem (NonDet : m) Value
+    scanOne val (Alt pat body) = do
+      withPattern (val, pat) do
         eval body
+
+withPattern :: (VM m, Member NonDet m) => (Addr, Pattern) -> Sem m a -> Sem m a
+withPattern (val, pat) k = do
+  case pat of
+    PSym ctor' b ->
+      force val >>= \case
+        (pos, Symbol ctor p) | ctor == ctor' ->
+          withPattern (p, b) k
+
+        _ -> empty
+
+    PRec fs -> do
+      force val >>= \case
+        (pos, Record fs') | Just subtasks <- matchFields fs' fs ->
+          withMany withPattern subtasks k
+
+        _ -> empty
+
+    PNum n -> do
+      force val >>= \case
+        (pos, Number m) | n == m -> do
+          k
+
+        _ -> empty
+
+    PStr n -> do
+      force val >>= \case
+        (pos, Text m) | n == m -> do
+          k
+
+        _ -> empty
+
+    PVar n -> do
+      local (Map.insert n val) do
+        k
+
+matchFields :: Map.Map String Addr -> [(String, Pattern)] -> Maybe [(Addr, Pattern)]
+matchFields fs tasks = do
+  for tasks \(name, pat)  -> do
+    addr <- Map.lookup name fs
+    return (addr, pat)
+
+withMany :: (a -> Sem m b -> Sem m b) -> [a] -> Sem m b -> Sem m b
+withMany f [] k = k
+withMany f (x : xs) k = do
+  f x do
+    withMany f xs k
+
 
 roll :: VM m => Value -> Sem m (CutValue)
 roll = \case
@@ -208,11 +269,10 @@ extract (pos, val) = case val of
     fields <- traverse extractArg fields0
     return $ pos :>? Record fields
 
-  where
-    extractArg addr = do
-      retrieve addr >>= \case
-        Ready val1 -> extract val1
-        _          -> return None
+extractArg addr = do
+  retrieve addr >>= \case
+    Ready val1 -> extract val1
+    _          -> return None
 
 class Interop a where
   to   ::                            Position -> a        -> CutValue
@@ -244,8 +304,8 @@ dispatch = FFI \pos -> \case
     x <- from @Double x
     y <- from @Double y
     return if x < y
-      then pos :>? Symbol Name {raw = "True", pos = pos, index = 0} (pos :>? Record mempty)
-      else pos :>? Symbol Name {raw = "False", pos = pos, index = 0} (pos :>? Record mempty)
+      then pos :>? Symbol "True" (pos :>? Record mempty)
+      else pos :>? Symbol "False" (pos :>? Record mempty)
 
   other -> \_ -> do
     throw (pos, NoSuchBuiltin other)

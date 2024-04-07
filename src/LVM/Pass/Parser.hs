@@ -65,16 +65,63 @@ prog = app
       , bif
       , str
       , rec_
-      , parens Round prog
+      , backtrack group0
+      , group
       , lam
       , sym
       , match
+      , list
       ]
+
+    group = do
+      pos <- getPosition
+      parens Round do
+        ts <- tupleExpr
+        return case ts of
+          [h] -> h
+          ts  -> pos :> Sym "Tuple" (pos :> Rec (zip ["_" <> show n | n <- [1..]] ts))
+
+    group0 = do
+      pos <- getPosition
+      parens Round do
+        return $ pos :> Sym "Tuple" (pos :> Rec [])
+
+    tupleExpr = do
+      h <- prog
+      t <- optional do
+        tok ","
+        tupleExpr
+      return $ [h] <> maybe [] id t
+
     app = do
       pos  <- getPosition
       core <- get
       args <- many get
       return $ foldl (\f arg -> pos :> App f arg) core args
+
+    list = do
+      parens Square do
+        listExpr
+
+    listExpr = do
+        tok "..."
+        prog
+      <|> do
+        pos <- getPosition
+        h <- prog
+        t <- optional do
+          tok ","
+          listExpr
+        return $
+          pos :> Sym "Cons"
+            (pos :> Rec
+              [ ("head", h)
+              , ("tail", maybe (pos :> Sym "Nil" (pos :> Rec [])) id t)
+              ]
+            )
+      <|> do
+        pos <- getPosition
+        return $ pos :> Sym "Nil" (pos :> Rec [])
 
     get = do
       pos  <- getPosition
@@ -82,7 +129,7 @@ prog = app
       fs   <- many do
         tok "."
         name
-      return $ foldl (\box field -> pos :> Get box field) core fs
+      return $ foldl (\box field -> pos :> Get box field.raw) core fs
 
     pin p = pure (:>) <*> getPosition <*> p
 
@@ -116,15 +163,83 @@ prog = app
       _    <- tok "match"
       subj <- prog
       _    <- tok "with"
-      alts <- parens Curly do
-        many do
-          c    <- ctor
-          arg  <- name
-          _    <- tok "=>"
-          b    <- prog
-          _    <- tok ";"
-          return (c, (arg, b))
-      return $ Match subj $ Map.fromList alts
+      as   <- parens Curly do alt `sepBy` tok "|"
+      return $ Match subj as
+
+    alt :: Parser (Alt Prog)
+    alt = do
+      p <- pat
+      _ <- tok "=>"
+      b <- prog
+      return $ Alt p b
+
+    pat :: Parser Pattern
+    pat = choice
+      [ do
+          c <- ctor
+          p <- pat
+          return (PSym c.raw p)
+
+      , parens Curly do
+          fs <- do
+              f <- name
+              p <- optional do
+                tok "="
+                pat
+              return (maybe (f.raw, PVar f) (f.raw,) p)
+            `sepBy` tok ","
+          return (PRec fs)
+      , PNum <$> float
+      , PStr <$> stringLiteral
+      , PVar <$> name
+
+      , parens Square do
+          pListExpr
+
+      , backtrack pGroup0
+      , pGroup
+      ]
+
+    pGroup = do
+      pos <- getPosition
+      parens Round do
+        ts <- pTupleExpr
+        return case ts of
+          [h] -> h
+          ts  -> PSym "Tuple" (PRec (zip ["_" <> show n | n <- [1..]] ts))
+
+    pGroup0 = do
+      pos <- getPosition
+      parens Round do
+        return $ PSym "Tuple" (PRec [])
+
+    pTupleExpr = do
+      h <- pat
+      t <- optional do
+        tok ","
+        pTupleExpr
+      return $ [h] <> maybe [] id t
+
+
+    pListExpr :: Parser Pattern
+    pListExpr = do
+        tok "..."
+        pat
+      <|> do
+        pos <- getPosition
+        h <- pat
+        t <- optional do
+          tok ","
+          pListExpr
+        return $
+          PSym "Cons"
+            (PRec
+              [ ("head", h)
+              , ("tail", maybe (PSym "Nil" (PRec [])) id t)
+              ]
+            )
+      <|> do
+        return $ PSym "Nil" (PRec [])
 
     rec_ :: Parser Prog
     rec_ = pin do
@@ -133,7 +248,7 @@ prog = app
           field <- name
           _     <- tok "="
           p     <- prog
-          return (field, p)
+          return (field.raw, p)
         return $ Rec fields
 
     -- get :: Parser (Prog -> Prog)
@@ -147,7 +262,7 @@ prog = app
     sym = pin do
       c <- ctor
       x <- get
-      return $ Sym c x
+      return $ Sym c.raw x
 
     -- app :: Parser (Prog -> Prog)
     -- app = do

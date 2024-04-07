@@ -17,7 +17,7 @@ reserved name = name `elem` words "let match with def do lambda return"
 --
 nameCharStart :: Parser Char
 nameCharStart = satisfy \c ->
-  not (isSpace c || isDigit c || elem c "\\!%$#(){}[]\"'.,;#" || elem c ['A'.. 'Z'])
+  not (isSpace c || isDigit c || elem c "\\!%$#(){}[]\"'.,;#|" || elem c ['A'.. 'Z'])
 
 -- Разобрать символ начала имени.
 --

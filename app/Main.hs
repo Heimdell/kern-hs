@@ -14,6 +14,7 @@ import Control.Monad.Except
 import Control.Monad.IO.Class
 import System.Environment
 import System.Console.Isocline
+import Data.Map qualified as Map
 
 import ParsingTools
 import LVM.Pass.Lexer
@@ -23,13 +24,16 @@ import LVM.Prog
 import LVM.Phase.Raw
 import LVM.Phase.Runtime
 import Input
+import LVM.Name
 
 import Polysemy
 import Polysemy.Error
+import Polysemy.Reader
 
 echo :: VM m => Sem m ()
 echo = do
-  line <- liftIO do readlineMaybe "KERN"
+  ns <- asks @(Map.Map Name Addr) Map.keys
+  line <- liftIO do readlineExMaybe "KERN" (Just (wordCompleter (map show ns))) Nothing
   case line of
     Nothing -> return ()
     Just line -> do
@@ -40,7 +44,7 @@ echo = do
         Right stmt -> do
           withStmt stmt \case
               Nothing -> echo
-              Just val -> do
+              Just (_, val) -> do
                 liftIO do print val
                 echo
             `catch` \(e :: Report) -> do
