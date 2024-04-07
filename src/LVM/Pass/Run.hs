@@ -157,14 +157,14 @@ match pos value alts = do
     Just res -> do
       return res
   where
-    complain :: VM m => Position -> Addr -> Sem (NonDet : m) Value
+    complain :: Position -> Addr -> Sem (NonDet : m) Value
     complain pos addr = do
       value0 <- force addr
       value <- extract value0
       throw (pos, NoCaseFor value)
 
     scan :: Addr -> [Alt Prog] -> Sem (NonDet : m) Value
-    scan val [] = empty
+    scan val []           = empty
     scan val (alt : alts) = scanOne val alt <|> scan val alts
 
     scanOne :: Addr -> Alt Prog -> Sem (NonDet : m) Value
@@ -185,7 +185,8 @@ withPattern (val, pat) k = do
     PRec fs -> do
       force val >>= \case
         (pos, Record fs') | Just subtasks <- matchFields fs' fs ->
-          withMany withPattern subtasks k
+          withMany withPattern subtasks do
+            k
 
         _ -> empty
 
@@ -213,12 +214,11 @@ matchFields fs tasks = do
     addr <- Map.lookup name fs
     return (addr, pat)
 
-withMany :: (a -> Sem m b -> Sem m b) -> [a] -> Sem m b -> Sem m b
+withMany :: (a -> b -> b) -> [a] -> b -> b
 withMany f [] k = k
 withMany f (x : xs) k = do
   f x do
     withMany f xs k
-
 
 roll :: VM m => Value -> Sem m (CutValue)
 roll = \case

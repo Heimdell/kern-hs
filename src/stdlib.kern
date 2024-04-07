@@ -85,3 +85,5 @@ let zip-with = \f, xs, ys =>
 ;
 
 let fib = [0, 1, ...zip-with + fib (tail fib)];
+
+let x = x;

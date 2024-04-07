@@ -71,6 +71,7 @@ prog = app
       , sym
       , match
       , list
+      , do_
       ]
 
     group = do
@@ -79,12 +80,12 @@ prog = app
         ts <- tupleExpr
         return case ts of
           [h] -> h
-          ts  -> pos :> Sym "Tuple" (pos :> Rec (zip ["_" <> show n | n <- [1..]] ts))
+          ts  -> pos :> Rec (zip ["_" <> show n | n <- [1..]] ts)
 
     group0 = do
       pos <- getPosition
       parens Round do
-        return $ pos :> Sym "Tuple" (pos :> Rec [])
+        return $ pos :> Rec []
 
     tupleExpr = do
       h <- prog
@@ -206,12 +207,12 @@ prog = app
         ts <- pTupleExpr
         return case ts of
           [h] -> h
-          ts  -> PSym "Tuple" (PRec (zip ["_" <> show n | n <- [1..]] ts))
+          ts  -> PRec (zip ["_" <> show n | n <- [1..]] ts)
 
     pGroup0 = do
       pos <- getPosition
       parens Round do
-        return $ PSym "Tuple" (PRec [])
+        return $ PRec []
 
     pTupleExpr = do
       h <- pat
