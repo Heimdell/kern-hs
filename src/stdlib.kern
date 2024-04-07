@@ -11,7 +11,7 @@ let cons = \h, t => [h, ...t];
 let o = \f, g, x => f (g x);
 
 let foldr = \f, z, xs =>
-  match xs with
+  case xs of
   { []        => z
   | [h, ...t] => f h (foldr f z t)
   }
@@ -20,31 +20,31 @@ let foldr = \f, z, xs =>
 let map = \f => foldr (o cons f) nil;
 
 let head = \xs =>
-  match xs with
+  case xs of
   { [h, ..._] => h
   };
 
 let tail = \xs =>
-  match xs with
+  case xs of
   { [_, ...t] => t
   };
 
 let nth = \n, xs =>
-  match (n, xs) with
+  case (n, xs) of
   { (0, [x, ...xs]) => x
   | (n, [x, ...xs]) => nth (- n 1) xs
   | _ => Nope ()
   };
 
 let drop = \n, xs =>
-  match (n, xs) with
+  case (n, xs) of
   { (0, xs) => xs
   | (n, [x, ...xs]) => drop (- n 1) xs
   | _ => Nope ()
   };
 
 let unfoldr = \z, f =>
-  match f z with
+  case f z of
   { Nothing _ => nil
   | Just pair => [pair.fst, ...unfoldr pair.snd f]
   }
@@ -53,7 +53,7 @@ let unfoldr = \z, f =>
 let iterate = \z, f => [z, ...iterate (f z) f];
 
 let if = \b, y, n =>
-  match b with
+  case b of
   { True  _ => y
   | False _ => n
   }
@@ -68,7 +68,7 @@ let
 
 let take = \n, xs =>
   if (< n 1) []
-    match xs with
+    case xs of
     { []  => []
     | [h, ...t] => [h, ...take (- n 1) t]
     }
@@ -78,7 +78,7 @@ let count-from = \l => iterate l (+ 1);
 let range = \l, h => take (+ 1 (- h l)) (count-from l);
 
 let zip-with = \f, xs, ys =>
-  match (xs, ys) with
+  case (xs, ys) of
   { ([x, ...xs], [y, ...ys]) => [f x y, ...zip-with f xs ys]
   | _                        => []
   }

@@ -11,7 +11,7 @@ import LVM.Name
 import LVM.Phase.Raw
 import ParsingTools
 
-reserved name = name `elem` words "let match with def do lambda return"
+reserved name = name `elem` words "let case of def do lambda return"
 
 -- Разобрать символ начала имени.
 --

@@ -160,9 +160,9 @@ prog = app
 
     match :: Parser Prog
     match = pin do
-      _    <- tok "match"
+      _    <- tok "case"
       subj <- prog
-      _    <- tok "with"
+      _    <- tok "of"
       as   <- parens Curly do alt `sepBy` tok "|"
       return $ Match subj as
 
