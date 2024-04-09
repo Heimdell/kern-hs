@@ -10,11 +10,13 @@ let cons = \h, t => [h, ...t];
 
 let o = \f, g, x => f (g x);
 
-let foldr = \f, z, xs =>
-  case xs of
-  { []        => z
-  | [h, ...t] => f h (foldr f z t)
-  }
+let foldr = \f, z =>
+  do let loop = \xs =>
+      case xs of
+      { []        => z
+      | [h, ...t] => f h (loop t)
+      }
+    ; return loop
 ;
 
 let map = \f => foldr (o cons f) nil;

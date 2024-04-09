@@ -10,8 +10,8 @@ dependencies:
 - containers
 - isocline
 - text
-- polysemy
-- polysemy-plugin
+- effectful
+- effectful-core
 - data-fix
 
 default-extensions:

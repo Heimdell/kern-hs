@@ -10,7 +10,6 @@
 
 import Control.Monad
 import Control.Applicative
-import Control.Monad.Except
 import Control.Monad.IO.Class
 import System.Environment
 import System.Console.Isocline
@@ -26,11 +25,11 @@ import LVM.Phase.Runtime
 import Input
 import LVM.Name
 
-import Polysemy
-import Polysemy.Error
-import Polysemy.Reader
+import Effectful
+import Effectful.Error.Static
+import Effectful.Reader.Static
 
-echo :: VM m => Sem m ()
+echo :: VM m => Eff m ()
 echo = do
   ns <- asks @(Map.Map Name Addr) Map.keys
   line <- liftIO do readlineExMaybe "KERN" (Just (wordCompleter (map show ns))) Nothing
@@ -47,7 +46,7 @@ echo = do
               Just (_, val) -> do
                 liftIO do print val
                 echo
-            `catch` \(e :: Report) -> do
+            `catchError` \_ (e :: Report) -> do
               liftIO do putStrLn $ "ERROR: " <> show e
               echo
 
@@ -64,7 +63,7 @@ main = do
     _ -> do
       error "USAGE: kern | kern FILE"
 
-load :: VM m => String -> Sem m a -> Sem m (Maybe a)
+load :: VM m => String -> Eff m a -> Eff m (Maybe a)
 load fname k = do
   stream <- liftIO do fromFile fname
   case runParser (many space *> stmts <* endOfStream) stream of

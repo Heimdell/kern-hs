@@ -8,11 +8,10 @@ import LVM.Phase.Raw
 import LVM.Name
 import Input
 
-import Polysemy
-import Polysemy.State
-import Polysemy.Reader
-import Polysemy.Error
-import Polysemy.Fixpoint
+import Effectful
+import Effectful.State.Static.Local
+import Effectful.Reader.Static
+import Effectful.Error.Static
 
 data Thunk
   = Ready      Value
@@ -55,39 +54,34 @@ data Machine = Machine
 data FFI = FFI
   { run
       :: forall n
-      .  Members '[Error Report, Embed IO] n
+      .  [Error Report, IOE] :>> n
       => Position
       -> String
       -> [CutValue]
-      -> Sem n (CutValue)
+      -> Eff n (CutValue)
   }
 
-type VM m = Members
-  '[ State  Machine
-   , Reader (Map.Map Name Addr)
-   , Reader  FFI
-   , Error   Report
-   , Fixpoint
-   , Embed IO
-   ] m
+type VM m =
+  [ State  Machine
+  , Reader (Map.Map Name Addr)
+  , Reader  FFI
+  , Error   Report
+  , IOE
+  ] :>> m
 
 runVM
   :: FFI
-  -> Sem
+  -> Eff
     [ State   Machine
     , Reader (Map.Map Name Addr)
     , Reader  FFI
     , Error   Report
-    , Fixpoint
-    , Embed IO
-    , Final IO
+    , IOE
     ] a
   -> IO (Either Report a)
 runVM dispatch
-  = runFinal
-  . embedToFinal
-  . fixpointToFinal @IO
-  . runError
+  = runEff
+  . runErrorNoCallStack
   . runReader dispatch
   . runReader mempty
   . evalState Machine { memory = mempty, hp = 0 }
