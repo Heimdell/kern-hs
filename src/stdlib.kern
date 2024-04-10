@@ -6,54 +6,37 @@ let
   - = $-/2
 ;
 
+let id = \x => x;
+
+-- (cons) : type a. a -> [a] -> [a]
+--
 let cons = \h, t => [h, ...t];
 
-let o = \f, g, x => f (g x);
+-- compose : type a b c. (b -> c) -> (a -> b) -> a -> c
+--
+let compose = \f, g, x => f (g x);
 
-let foldr = \f, z =>
-  do let loop = \xs =>
-      case xs of
-      { []        => z
-      | [h, ...t] => f h (loop t)
-      }
-    ; return loop
+-- >> : type a b c. (a -> b) -> (b -> c) -> a -> c
+--
+let chain = \f, g, x => g (f x);
+
+-- foldr : type a b. (a -> b -> b) -> b -> [a] -> b
+--
+let foldr = \f, z => do
+  let loop = \xs =>
+    case xs of
+    { []        => z
+    | [h, ...t] => f h (loop t)
+    };
+  in loop
 ;
 
-let map = \f => foldr (o cons f) nil;
+-- map : type a b. (a -> b) -> [a] -> [b]
+--
+let map = \f => foldr (compose cons f) [];
 
-let head = \xs =>
-  case xs of
-  { [h, ..._] => h
-  };
-
-let tail = \xs =>
-  case xs of
-  { [_, ...t] => t
-  };
-
-let nth = \n, xs =>
-  case (n, xs) of
-  { (0, [x, ...xs]) => x
-  | (n, [x, ...xs]) => nth (- n 1) xs
-  | _ => Nope ()
-  };
-
-let drop = \n, xs =>
-  case (n, xs) of
-  { (0, xs) => xs
-  | (n, [x, ...xs]) => drop (- n 1) xs
-  | _ => Nope ()
-  };
-
-let unfoldr = \z, f =>
-  case f z of
-  { Nothing _ => nil
-  | Just pair => [pair.fst, ...unfoldr pair.snd f]
-  }
-;
-
-let iterate = \z, f => [z, ...iterate (f z) f];
-
+-- if : type a. Bool -> a -> a -> a
+--
 let if = \b, y, n =>
   case b of
   { True  _ => y
@@ -61,24 +44,75 @@ let if = \b, y, n =>
   }
 ;
 
-let replace-with = \x, _ => x;
+-- filter : type a b. (a -> Bool) -> [a] -> [a]
+--
+let filter = \good? => foldr (\x => if (good? x) (cons x) id) [];
 
-let
-  sum    = foldr + 0,
-  length = o sum (map (replace-with 1))
+let head = \xs => case xs of { [h, ..._] => h };
+let tail = \xs => case xs of { [_, ...t] => t };
+
+-- nth : Num -> [a] -> a
+--
+let nth = \n, xs =>
+  case (n, xs) of
+  { (0, [x, ...xs]) => x
+  | (n, [x, ...xs]) => nth (- n 1) xs
+  };
+
+-- drop : Num -> [a] -> [a]
+--
+let drop = \n, xs =>
+  case (n, xs) of
+  { (0,        xs ) => xs
+  | (n, [x, ...xs]) => drop (- n 1) xs
+  |  _              => []
+  };
+
+-- unfoldr : b -> (b -> Maybe (a, b)) -> [a]
+--
+let unfoldr = \z, f =>
+  case f z of
+  { Nothing _    => nil
+  | Just    pair => [pair.fst, ...unfoldr pair.snd f]
+  }
 ;
 
+-- iterate : a -> (a -> a) -> [a]
+--
+let iterate = \z, f => [z, ...iterate (f z) f];
+
+-- replace-with : a -> b -> a
+--
+let replace-with = \x, _ => x;
+
+-- sum    : [Num] -> Num
+-- length : [a]   -> Num
+--
+let
+  sum    = foldr + 0,
+  length = compose sum (map (replace-with 1))
+;
+
+-- take : Num -> [a] -> [a]
+--
 let take = \n, xs =>
   if (< n 1) []
     case xs of
-    { []  => []
+    { []        => []
     | [h, ...t] => [h, ...take (- n 1) t]
     }
 ;
 
+-- count-from : Num -> [Num]
+--
 let count-from = \l => iterate l (+ 1);
+
+-- range : Num -> Num -> [Num]
+--
 let range = \l, h => take (+ 1 (- h l)) (count-from l);
 
+-- zip-with : type a b c. (a -> b -> c) -> [a] -> [b] -> [c]
+--
 let zip-with = \f, xs, ys =>
   case (xs, ys) of
   { ([x, ...xs], [y, ...ys]) => [f x y, ...zip-with f xs ys]
@@ -86,6 +120,45 @@ let zip-with = \f, xs, ys =>
   }
 ;
 
+-- fib : [Num]
+--
 let fib = [0, 1, ...zip-with + fib (tail fib)];
 
-let x = x;
+-- or? : Bool -> Bool -> Bool
+--
+let or? = \x, y => if x True {} y;
+
+-- and? : Bool -> Bool -> Bool
+--
+let and? = \x, y => if x y False {};
+
+-- not? : Bool -> Bool
+--
+let not? = \x => if x False {} True {};
+
+-- any? : (a -> Bool) -> [a] -> Bool
+--
+let any? = \does? => compose (foldr or? False {}) (map does?);
+
+-- all? : (a -> Bool) -> [a] -> Bool
+--
+let all? = \does? => compose (foldr and? False {}) (map does?);
+
+-- flip : (a -> b -> c) -> b -> a -> c
+--
+let flip = \f, x, y => f y x;
+
+-- cond : type a. [(Bool, a)] -> a -> a
+--
+let cond = do
+  let select = \pair, rest =>
+    if pair._1 pair._2 rest;
+
+  in flip (foldr select);
+
+let true = True {};
+let false = False {};
+
+-- let append = \xs, ys => foldr cons ys xs;
+let append = flip (foldr cons);
+let concat = foldr append [];

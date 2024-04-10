@@ -11,7 +11,7 @@ import LVM.Name
 import LVM.Phase.Raw
 import ParsingTools
 
-reserved name = name `elem` words "let case of def do lambda return"
+reserved name = name `elem` words "let case of def do lambda in"
 
 -- Разобрать символ начала имени.
 --
@@ -33,7 +33,7 @@ nameChar = satisfy \c ->
 -- Разобрать пробельный символ.
 --
 space :: Parser ()
-space = void (satisfy isSpace) <|> lineComment "//"
+space = void (satisfy isSpace) <|> lineComment "--"
 
 -- Сделать токен из парсера.
 --

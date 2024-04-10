@@ -138,7 +138,7 @@ prog = app
     do_ = pin do
       _     <- tok "do"
       ss    <- stmts
-      _     <- tok "return"
+      _     <- tok "in"
       res   <- prog
       return $ Do ss res
 
