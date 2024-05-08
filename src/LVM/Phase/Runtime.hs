@@ -1,17 +1,16 @@
 
 module LVM.Phase.Runtime where
 
-import Data.Map qualified as Map
+import Data.Map.Strict qualified as Map
 import Data.Fix
 
 import LVM.Phase.Raw
 import LVM.Name
 import Input
 
-import Effectful
-import Effectful.State.Static.Local
-import Effectful.Reader.Static
-import Effectful.Error.Static
+import Control.Monad.Reader
+import Control.Monad.State
+import Control.Monad.Except
 
 data Thunk
   = Ready      Value
@@ -53,38 +52,32 @@ data Machine = Machine
 
 data FFI = FFI
   { run
-      :: forall n
-      .  [Error Report, IOE] :>> n
-      => Position
+      :: Position
       -> String
       -> [CutValue]
-      -> Eff n (CutValue)
+      -> ExceptT Report IO CutValue
   }
 
-type VM m =
-  [ State  Machine
-  , Reader (Map.Map Name Addr)
-  , Reader  FFI
-  , Error   Report
-  , IOE
-  ] :>> m
+data Env = Env
+  { bindings :: Map.Map Name Addr
+  , ffi      :: FFI
+  }
+
+type VM =
+    StateT  Machine
+  ( ReaderT Env
+  ( ExceptT Report
+    IO
+  ) )
 
 runVM
   :: FFI
-  -> Eff
-    [ State   Machine
-    , Reader (Map.Map Name Addr)
-    , Reader  FFI
-    , Error   Report
-    , IOE
-    ] a
+  -> VM a
   -> IO (Either Report a)
 runVM dispatch
-  = runEff
-  . runErrorNoCallStack
-  . runReader dispatch
-  . runReader mempty
-  . evalState Machine { memory = mempty, hp = 0 }
+  = runExceptT
+  . flip runReaderT Env {bindings = mempty, ffi = dispatch}
+  . flip evalStateT Machine { memory = mempty, hp = 0 }
 
 instance Show self => Show (Value_ self) where
   show = \case

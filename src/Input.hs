@@ -25,6 +25,9 @@ data Position = Position
   , filename :: String
   }
 
+nowhere :: Position
+nowhere = Position { offset = -1, line = -1, column = -1, filename = "nowhere"}
+
 instance Show Position where
   show pos = pos.filename <> ":" <> show pos.line <> ":" <> show pos.column
 

@@ -1,2 +1,4 @@
 .stack-work
 .kern
+kern-repl.prof
+kern.cabal

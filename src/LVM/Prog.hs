@@ -4,6 +4,8 @@ module LVM.Prog where
 import Data.Map qualified as Map
 
 import LVM.Name
+import LVM.Type
+import LVM.Kind
 
 data Prog_ self
   = Var Name
@@ -17,9 +19,11 @@ data Prog_ self
   | Rec [(String, self)]
   | Get self String
 
-  | BIF String Int
+  | BIF String Type
   | Num Double
   | Str String
+
+  | Ann self Type
 
   | Do [Stmt self] self
   deriving stock (Functor, Foldable, Traversable)
@@ -38,8 +42,10 @@ data Pattern
   | PVar   Name
 
 data Stmt prog
-  = Force prog
-  | Let [(Name, prog)]
+  = ValSig   Name Type
+  | ValDecl  Name prog
+  | TypeDecl Name TypeExpr
+  | TypeSig  Name Kind
   deriving stock (Show, Functor, Foldable, Traversable)
 
 instance Show self => Show (Alt self) where

@@ -14,27 +14,26 @@ import LVM.Prog
 import LVM.Name
 import Input
 
-import Effectful
-import Effectful.State.Static.Local hiding (Get)
-import Effectful.Reader.Static
-import Effectful.Error.Static
-import Effectful.NonDet
+import Control.Monad.State
+import Control.Monad.Reader
+import Control.Monad.Except
+import Control.Monad.Logic
 
 import Debug.Trace
 
-retrieve :: VM m => Addr -> Eff m Thunk
+retrieve :: Addr -> VM Thunk
 retrieve addr = gets @Machine ((Map.! addr) . (.memory))
 
-store :: VM m => Addr -> Thunk -> Eff m ()
+store :: Addr -> Thunk -> VM ()
 store addr thunk = modify @Machine \m -> m { memory = Map.insert addr thunk m.memory}
 
-addressOf :: VM m => Name -> Eff m Addr
+addressOf :: Name -> VM Addr
 addressOf var = do
-  asks @(Map.Map Name Addr) (Map.lookup var) >>= \case
+  asks (Map.lookup var . (.bindings)) >>= \case
     Nothing   -> throwError (var.pos, Undefined var)
     Just addr -> return addr
 
-force :: VM m => Addr -> Eff m Value
+force :: Addr -> VM Value
 force addr = do
   thunk <- retrieve addr
   case thunk of
@@ -42,33 +41,33 @@ force addr = do
     Ready val -> return val
     Delayed env prog@(pos :> _) -> do
       store addr $ BLACKHOLE pos
-      val <- local (const env) do
+      val <- local (\s -> s { bindings = env }) do
         eval prog
       store addr (Ready val)
       return val
 
-eval :: VM m => Prog -> Eff m Value
+eval :: Prog -> VM Value
 eval = \case
   _ :> Var name -> do
     addr <- addressOf name
     force addr
 
   pos :> Lam arg body -> do
-    env <- ask
+    env <- asks (.bindings)
     return (pos, Closure env arg body)
 
   pos :> App f xs0 -> do
     xs <- delay xs0
     eval f >>= \case
       (_, Closure env arg body) -> do
-        local (const (Map.insert arg xs env)) do
+        local (\s -> s { bindings = Map.insert arg xs env }) do
           eval body
 
       (pos1, Builtin bif args stack) -> do
         case args of
           1 -> do
-            FFI ffi <- ask @FFI
-            unroll =<< ffi pos bif =<< traverse (roll <=< force) (reverse (xs : stack))
+            FFI ffi <- asks (.ffi)
+            unroll =<< lift . lift . ffi pos bif =<< traverse (roll <=< force) (reverse (xs : stack))
 
           n -> do
             return (pos1, Builtin bif (n - 1) (xs : stack))
@@ -113,17 +112,17 @@ eval = \case
     withStmts stmts do
       eval res
 
-withStmts :: VM m => [Stmt Prog] -> Eff m a -> Eff m a
+withStmts :: [Stmt Prog] -> VM a -> VM a
 withStmts [] ma = ma
 withStmts (stmt : stmts) ma = do
   withStmt stmt \_ -> do
     withStmts stmts ma
 
-withStmt :: VM m => Stmt Prog -> (Maybe Value -> Eff m a) -> Eff m a
+withStmt :: Stmt Prog -> (Maybe Value -> VM a) -> VM a
 withStmt stmt ma = do
   case stmt of
     Let decls -> do
-      env <- ask
+      env <- asks (.bindings)
       decls' <- for decls \(name, _) -> do
         addr <- alloc $ BLACKHOLE nowhere
         return (name, addr)
@@ -133,19 +132,19 @@ withStmt stmt ma = do
       for (zip decls decls') \((name, prog), (_, addr)) -> do
         store addr $ Delayed env' prog
 
-      local (const env') do
+      local (\s -> s { bindings = env' }) do
         ma Nothing
 
     Force prog -> do
       value <- eval prog
       ma (Just value)
 
-delay :: VM m => Prog -> (Eff m) Addr
+delay :: Prog -> (VM) Addr
 delay prog = do
-  env <- ask
+  env <- asks (.bindings)
   alloc $ Delayed env prog
 
-alloc :: VM m => Thunk -> Eff m Addr
+alloc :: Thunk -> VM Addr
 alloc thunk = do
   addr <- gets @Machine (.hp)
   modify @Machine \m -> m
@@ -154,31 +153,31 @@ alloc thunk = do
     }
   return addr
 
-match :: forall m. VM m => Position -> Addr -> [Alt Prog] -> Eff m Value
+match :: forall m. Position -> Addr -> [Alt Prog] -> VM Value
 match pos value alts = do
-  runNonDet OnEmptyKeep (scan value alts <|> complain pos value) >>= \case
+  runLogicT (scan value alts <|> complain pos value) >>= \case
     Left _ -> do
       throwError (pos, NoCaseFor (nowhere :>? Record mempty))
 
     Right res -> do
       return res
   where
-    complain :: Position -> Addr -> Eff (NonDet : m) Value
+    complain :: Position -> Addr -> LogicT VM Value
     complain pos addr = do
       value0 <- force addr
       value <- extract value0
       throwError (pos, NoCaseFor value)
 
-    scan :: Addr -> [Alt Prog] -> Eff (NonDet : m) Value
+    scan :: Addr -> [Alt Prog] -> LogicT VM Value
     scan val []           = empty
     scan val (alt : alts) = scanOne val alt <|> scan val alts
 
-    scanOne :: Addr -> Alt Prog -> Eff (NonDet : m) Value
+    scanOne :: Addr -> Alt Prog -> LogicT VM Value
     scanOne val (Alt pat body) = do
       withPattern (val, pat) do
         eval body
 
-withPattern :: (VM m, NonDet :> m) => (Addr, Pattern) -> Eff m a -> Eff m a
+withPattern :: (Addr, Pattern) -> VM a -> VM a
 withPattern (val, pat) k = do
   case pat of
     PSym ctor' b ->
@@ -226,7 +225,7 @@ withMany f (x : xs) k = do
   f x do
     withMany f xs k
 
-roll :: VM m => Value -> Eff m (CutValue)
+roll :: Value -> VM (CutValue)
 roll = \case
   (pos, Closure {}) -> throwError (pos, Can'tPassFunctionsToBIFs)
   (pos, Builtin {}) -> throwError (pos, Can'tPassFunctionsToBIFs)
@@ -240,7 +239,7 @@ roll = \case
     fields <- traverse (force >=> roll) fields0
     return $ pos :>? Record fields
 
-unroll :: VM m => CutValue -> Eff m Value
+unroll :: CutValue -> VM Value
 unroll (pos :>? val) = case val of
   Closure {} -> throwError (pos, Can'tPassFunctionsToBIFs)
   Builtin {} -> throwError (pos, Can'tPassFunctionsToBIFs)
@@ -257,7 +256,7 @@ unroll (pos :>? val) = case val of
 unroll None = do
   error "builtin have returned malformed value"
 
-extract :: VM m => Value -> Eff m CutValue
+extract :: Value -> VM CutValue
 extract (pos, val) = case val of
   Closure env args prog -> return $ pos :>? Closure env args prog
   Number  n             -> return $ pos :>? Number  n
@@ -282,7 +281,7 @@ extractArg addr = do
 
 class Interop a where
   to   ::                            Position -> a        -> CutValue
-  from :: Error Report :> m =>        CutValue -> Eff m a
+  from :: CutValue -> Either Report a
 
 instance Interop Double where
   to pos n = pos :>? Number n
