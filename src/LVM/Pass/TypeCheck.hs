@@ -31,6 +31,7 @@ data TCError
   | IsNotUnion Type
   | IsNotRecord Type
   | CannotInferConstructor
+  | TypeRedeclared Name
 
 data ScopeError
   = Undefined Name String
@@ -39,7 +40,7 @@ data ScopeError
 data Env = Env
   { kinds   :: Map.Map Name Kind
   , structs :: Map.Map Name TypeExpr
-  , values  :: Map.Map Name (Scheme (Term Type_) Name)
+  , types  :: Map.Map Name (Scheme (Term Type_) Name)
   }
 
 type TC =
@@ -85,6 +86,11 @@ findKind name = do
     Just ki -> do
       return ki
 
+withKind :: Name -> Kind -> TC a -> TC a
+withKind name kind ma = do
+  local (\s -> s { kinds = Map.insert name kind s.kinds }) do
+    ma
+
 findTypeStructure :: Name -> TC TypeExpr
 findTypeStructure name = do
   asks (Map.lookup name . (.structs)) >>= \case
@@ -96,7 +102,7 @@ findTypeStructure name = do
 
 findValue :: Name -> TC Type
 findValue name = do
-  asks (Map.lookup name . (.values)) >>= \case
+  asks (Map.lookup name . (.types)) >>= \case
     Nothing -> do
       throwError (name.pos, ScopeError (Undefined name "value"))
 
@@ -105,7 +111,7 @@ findValue name = do
 
 withType :: Name -> Scheme (Term Type_) Name -> TC a -> TC a
 withType n t ma = do
-  local (\s -> s { values = Map.insert n t s.values }) do
+  local (\s -> s { types = Map.insert n t s.types }) do
     ma
 
 newKind :: Name -> TC Kind
@@ -224,6 +230,15 @@ withStmts (stmt : stmts) k = do
 withStmt :: Stmt Prog -> TC a -> TC a
 withStmt stmt k = case stmt of
   TypeSig tname kind -> withKind tname kind k
+  TypeDecl tname texpr -> do
+    kind <- findKind tname
+    findTypeStructure tname >>= \case
+      Scheme _ (Compose Undeclared) -> do
+        _
+
+      _ ->
+        throwError (tname.pos, TypeRedeclared tname)
+
 
 withPat :: Position -> Type -> Pattern -> TC a -> TC a
 withPat pos ty pat k = case pat of

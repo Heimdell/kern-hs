@@ -11,6 +11,7 @@ import LVM.Name
 import LVM.Phase.Raw
 import ParsingTools
 
+reserved :: String -> Bool
 reserved name = name `elem` words "let case of def do lambda in"
 
 -- Разобрать символ начала имени.

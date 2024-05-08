@@ -22,6 +22,7 @@ type Type = Term Type_ Name
 data TypeExpr_ ty
   = Union  { ctors :: Map.Map String ty }
   | Record { ctors :: Map.Map String ty }
+  | Undeclared
   deriving stock (Functor, Foldable, Traversable)
 
 type TypeExpr  = Scheme (Compose TypeExpr_ (Term Type_)) Name
@@ -37,6 +38,7 @@ instance (Show ty) => Show (TypeExpr_ ty) where
   show = \case
     Union fs -> "union " <> showMap fs
     Record fs -> "record " <> showMap fs
+    Undeclared -> "undeclared"
 
 showMap :: (Show k, Show v) => Map.Map k v -> String
 showMap m = "{" <> intercalate ", " (map (\(k, v) -> show k <> " = " <> show v) (Map.toList m)) <> "}"
